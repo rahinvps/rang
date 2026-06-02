@@ -1,40 +1,60 @@
-import os
-import threading
-from flask import Flask
-
-# --- FLASK SERVER SETUP FOR RENDER (ADDED BY MINOX AUTO SETUP) ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is successfully running on Render!"
-
-def run_server():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
 import requests
 import time
-import html
+import telebot
+import threading
 import random
+import html
 
-# --- আপনার কনফিগারেশন ---
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+# ============================================
+# CONFIG
+# ============================================
+
 BOT_TOKEN = "8620237186:AAF11ibRkQTO-lFKLnlr39prFZEVf_fxiIQ"
-CHAT_ID = "-1003644188907"  
-API_KEY = "MRKVD1UFXWP"     
-API_URL = "https://2oo9.cloud/api/MXS47FLFX0U/project/tetragonexvoltxsms/@public/api/console"
+CHAT_ID = "-1003644188907"
+API_KEY = "MRKVD1UFXWP"
 
-# আপনার অনুরোধ অনুযায়ী চেক ইন্টারভাল ৫০ সেকেন্ড করা হলো
-CHECK_INTERVAL = 50       
+BASE_URL = "https://2oo9.cloud/api/MXS47FLFX0U/project/tetragonexvoltxsms/@public/api"
 
-# --- আপনার লিংকসমূহ (এখানে আপনার আসল লিংকগুলো বসিয়ে দিন) ---
-NUMBER_BOT_LINK = "https://t.me/rmxel1_bot"    # আপনার নাম্বার বটের লিংক
-MAIN_CHANNEL_LINK = "https://t.me/rmmethodzone" # আপনার মেইন চ্যানেলের লিংক
+HEADERS = {
+    "mauthapi": API_KEY
+}
 
-sent_messages = set()
-is_first_run = True  # প্রথমবার পুরনো মেসেজগুলো ইগনোর করার জন্য
+# ============================================
+# BUTTON LINKS
+# ============================================
 
-# দেশের কলিং কোড ও পতাকার ডিকশনারি
+CHANNEL_LINK = "https://t.me/rmmethodzone"
+NUMBER_BOT_LINK = "https://t.me/rmxel_bot"
+
+# ============================================
+# SERVICES & EMOJIS
+# ============================================
+
+SERVICES = ["facebook", "whatsapp", "telegram", "instagram"]
+
+SERVICE_MAP = {
+    "facebook": {"short": "FB", "emoji": "🔵"},
+    "whatsapp": {"short": "WA", "emoji": "🟢"},
+    "telegram": {"short": "TG", "emoji": "🔷"},
+    "instagram": {"short": "IG", "emoji": "📸"}
+}
+
+# ============================================
+# SETTINGS
+# ============================================
+
+DELETE_AFTER = 180
+
+bot = telebot.TeleBot(BOT_TOKEN)
+
+sent_hits = set()
+
+# ============================================
+# COUNTRY DETECT (ALL COUNTRIES UPDATED)
+# ============================================
+
 COUNTRY_CODES = {
     "1": "🇺🇸/🇨🇦 USA/Canada", "7": "🇷🇺/🇰🇿 Russia/Kazakhstan", "20": "🇪🇬 Egypt", 
     "27": "🇿🇦 South Africa", "30": "🇬🇷 Greece", "31": "🇳🇱 Netherlands", "32": "🇧🇪 Belgium", 
@@ -78,7 +98,7 @@ COUNTRY_CODES = {
     "593": "🇪🇨 Ecuador", "594": "🇬🇫 French Guiana", "595": "🇵🇾 Paraguay", "596": "🇲🇶 Martinique", 
     "597": "🇸🇷 Suriname", "598": "🇺🇾 Uruguay", "599": "🇨🇼 Curacao", "670": "🇹🇱 East Timor", 
     "672": "🇦🇶 Antarctica", "673": "🇧🇳 Brunei", "674": "🇳🇷 Nauru", "675": "🇵🇬 Papua New Guinea", 
-    "676": "🇹🇴 Tonga", "677": "🇸🇧 Solomon Islands", "678": "🇻🇺 Vanuatu", "679": "🇫🇯 Fiji", 
+    "676": "🇹🇴 Tonga", "677": "🇸🇧 Solomon Islands", "678": "🇻🇺 Vanuatu", "679": "🇫يج Fiji", 
     "680": "🇵🇼 Palau", "681": "🇼🇫 Wallis and Futuna", "682": "🇨🇰 Cook Islands", "683": "🇳🇺 Niue", 
     "685": "🇼🇸 Samoa", "686": "🇰🇮 Kiribati", "687": "🇳🇨 New Caledonia", "688": "🇹🇻 Tuvalu", 
     "689": "🇵🇫 French Polynesia", "690": "🇹🇰 Tokelau", "691": "🇫🇲 Micronesia", "692": "🇲🇭 Marshall Islands", 
@@ -92,122 +112,168 @@ COUNTRY_CODES = {
     "996": "🇰🇬 Kyrgyzstan", "998": "🇺🇿 Uzbekistan"
 }
 
-def get_country_prefix_and_info(range_num):
-    range_str = str(range_num)
-    for length in [3, 2, 1]:
-        prefix = range_str[:length]
-        if prefix in COUNTRY_CODES:
-            return prefix, COUNTRY_CODES[prefix]
-    return "0", "🌐 Unknown"
+def get_country_info(rang):
+    rang = str(rang)
+    for code in sorted(COUNTRY_CODES.keys(), key=len, reverse=True):
+        if rang.startswith(code):
+            text_data = COUNTRY_CODES[code]
+            # ফ্ল্যাগ এবং শর্ট নেম আলাদা করা
+            parts = text_data.split(" ")
+            flag = parts[0]
+            name = " ".join(parts[1:])
+            
+            # শর্ট কোডের জন্য কাস্টম লজিক (যেমন: USA/Canada -> US)
+            short = name.split("/")[0][:2].upper()
+            return {"name": name, "flag": flag, "short": short}, code
+            
+    return {"name": "Global", "flag": "🌍", "short": "GL"}, ""
 
-# ৩ ডিজিট + RAHIN + ৪ ডিজিট র্যান্ডম নাম্বার জেনারেটর
-def generate_real_looking_number(country_prefix):
-    three_digits = "".join(random.choices("0123456789", k=3))
-    four_digits = "".join(random.choices("0123456789", k=4))
-    return f"+{country_prefix}{three_digits}RAHIN{four_digits}"
+# ============================================
+# FAKE REALISTIC NUMBER GENERATOR
+# ============================================
 
-def get_console_data():
-    headers = {
-        "mauthapi": API_KEY,
-        "Cache-Control": "no-cache"
-    }
-    params = {
-        "_": int(time.time() * 1000) 
-    }
+def generate_fake_number(rang):
+    country_info, code = get_country_info(rang)
+    if not code:
+        return f"+{random.randint(1000000000, 9999999999)}"
+    fake_digits = "".join([str(random.randint(0, 9)) for _ in range(8)])
+    return f"+{code}{fake_digits}"
+
+# ============================================
+# BUTTONS GENERATOR (TELEBOT COMPATIBLE)
+# ============================================
+
+def make_buttons(otp_code):
+    markup = InlineKeyboardMarkup(row_width=2)
+    
+    # প্রথম সারির বাটন (ওটিপি এবং ফুল এসএমএস কপি টাইপ অ্যালার্ট)
+    markup.add(
+        InlineKeyboardButton(f"🔑 {otp_code}", callback_data=f"copy_otp_{otp_code}"),
+        InlineKeyboardButton("💬 Full SMS", callback_data="copy_full_sms")
+    )
+    
+    # দ্বিতীয় সারির বাটন (বট এবং চ্যানেল লিংক)
+    markup.add(
+        InlineKeyboardButton("🤖 NUMBER BOT", url=NUMBER_BOT_LINK),
+        InlineKeyboardButton("📢 MAIN CHANNEL", url=CHANNEL_LINK)
+    )
+    return markup
+
+# ============================================
+# REALISTIC OTP TEXT GENERATOR
+# ============================================
+
+def get_real_sms_text(app, otp_code):
+    if "telegram" in app:
+        return f"Telegram code: {otp_code}. You can also use this link to log in:\nhttps://t.me/login/{otp_code}\n\nDon't give this code to anyone, even if they say they're from Telegram!"
+    elif "whatsapp" in app:
+        return f"Your WhatsApp code is {otp_code}. You can also tap on this link to verify your phone:\nv.whatsapp.com/{otp_code}\n\nDon't share this code with others."
+    elif "facebook" in app:
+        return f"{otp_code} is your Facebook confirmation code. For your security, do not share this code."
+    elif "instagram" in app:
+        return f"{otp_code} is your Instagram code. Sharing this code can give others access to your account."
+    else:
+        return f"Your verification code is: {otp_code}. Valid for 5 minutes. Do not share this OTP."
+
+# ============================================
+# NON-BLOCKING AUTO DELETE
+# ============================================
+
+def auto_delete(chat_id, message_id):
+    def worker():
+        time.sleep(DELETE_AFTER)
+        try:
+            bot.delete_message(chat_id, message_id)
+        except:
+            pass
+    threading.Thread(target=worker, daemon=True).start()
+
+# ============================================
+# SEND RANGE WITH YOUR FORMAT
+# ============================================
+
+def send_range(service, hit):
+    rang = hit["range"]
+    country_info, _ = get_country_info(rang)
+    
+    premium_flag = country_info["flag"]
+    srv_data = SERVICE_MAP.get(service, {"short": service.upper(), "emoji": "🔥"})
+    
+    short_code = f"{country_info['short']}_{srv_data['short']}"
+    srv_emoji = srv_data["emoji"]
+    
+    masked = generate_fake_number(rang)
+    otp_code = str(random.randint(100000, 999999)) if service != "telegram" else str(random.randint(10000, 99999))
+    full_sms = get_real_sms_text(service, otp_code)
+
+    # আপনার পাঠানো ডিজাইন অনুযায়ী হুবহু গ্রুপ মেসেজ ফরম্যাট
+    group_msg = (
+        f"{premium_flag} <b>#{short_code} {srv_emoji} OTP SUCCESS</b>\n\n"
+        f"<b>Number:</b> <code>{masked}</code>\n"
+        f"<b>OTP Code:</b> <code>{html.escape(otp_code)}</code>\n"
+        f"<b>Full SMS:</b> <code>{html.escape(full_sms)}</code>"
+    )
+
     try:
-        response = requests.get(API_URL, headers=headers, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("meta", {}).get("status") == "ok":
-                return data.get("data", {}).get("hits", [])
-        else:
-            print(f"❌ API Error: HTTP {response.status_code}")
+        sent = bot.send_message(
+            CHAT_ID,
+            group_msg,
+            parse_mode="HTML",
+            reply_markup=make_buttons(otp_code)
+        )
+        auto_delete(CHAT_ID, sent.message_id)
     except Exception as e:
-        print(f"❌ Network Error: {e}")
-    return []
+        print("Telegram Send Error:", e)
 
-def send_to_telegram(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    
-    # আপনার অনুরোধ অনুযায়ী বাটন দুটি পরিবর্তন করা হলো
-    reply_markup = {
-        "inline_keyboard": [
-            [
-                {"text": "🤖 Number Bot", "url": NUMBER_BOT_LINK},
-                {"text": "📢 Main Channel", "url": MAIN_CHANNEL_LINK}
-            ]
-        ]
-    }
-    
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "reply_markup": reply_markup
-    }
-    try:
-        response = requests.post(url, json=payload)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"❌ Request Error: {e}")
-        return False
+# ============================================
+# CALLBACK HANDLING FOR ALERT
+# ============================================
 
-def main():
-    global is_first_run
-    print(f"Bot is running... Delay set to {CHECK_INTERVAL} seconds.")
-    
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data.startswith("copy_otp_"):
+        otp = call.data.replace("copy_otp_", "")
+        bot.answer_callback_query(call.id, text=f"🔑 Code: {otp} (Tap hold message text to copy)", show_alert=False)
+    elif call.data == "copy_full_sms":
+        bot.answer_callback_query(call.id, text="💬 Copy full text box directly from the chat!", show_alert=False)
+
+# ============================================
+# CONSOLE LOOP
+# ============================================
+
+def check_console():
     while True:
-        start_time = time.time()
-        
-        hits = get_console_data()
-        
-        for hit in reversed(hits):
-            msg_time = hit.get("time")
-            
-            if msg_time not in sent_messages:
-                if is_first_run:
-                    sent_messages.add(msg_time)
-                else:
-                    raw_message = hit.get("message", "N/A")
-                    range_num = hit.get("range", "N/A")
-                    sid = hit.get("sid", "N/A")
-                    
-                    safe_message = html.escape(raw_message)
-                    
-                    country_prefix, country_info = get_country_prefix_and_info(range_num)
-                    fake_number = generate_real_looking_number(country_prefix)
-                    
-                    # --- রিয়েল এসএমএস এলার্ট ডিজাইন ---
-                    formatted_msg = (
-                        f"💬 <b>{sid.upper()} 📳NEW OTP RECIVE🔥</b>\n"
-                        f"Country: {country_info} | Number: <code>{fake_number}</code>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                        f"{safe_message}\n\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"<i>⏱️ Received: {time.strftime('%I:%M:%S %p')}</i>"
-                    )
-                    
-                    if send_to_telegram(formatted_msg):
-                        sent_messages.add(msg_time)
-                        print(f"✅ Forwarded for: {fake_number}")
-                    else:
-                        print(f"⚠️ Failed to forward message for: {fake_number}")
-        
-        if is_first_run:
-            print(f"✅ Sync complete. Monitoring for NEW messages every {CHECK_INTERVAL} seconds...")
-            is_first_run = False
-            
-        if len(sent_messages) > 1000:
-            sent_messages.clear()
-            
-        elapsed_time = time.time() - start_time
-        sleep_time = max(0, CHECK_INTERVAL - elapsed_time)
-        time.sleep(sleep_time)
+        try:
+            url = f"{BASE_URL}/console"
+            res = requests.get(url, headers=HEADERS, timeout=40)
+            data = res.json()
+
+            if data["meta"]["code"] == 200:
+                for hit in data["data"]["hits"]:
+                    service = hit["sid"].lower()
+
+                    if service not in SERVICES:
+                        continue
+
+                    uid = f"{hit['range']}_{hit['time']}"
+
+                    if uid in sent_hits:
+                        continue
+
+                    sent_hits.add(uid)
+                    send_range(service, hit)
+                    time.sleep(40)
+
+        except Exception as e:
+            print("ERROR:", e)
+
+        time.sleep(55)
+
+# ============================================
+# START
+# ============================================
 
 if __name__ == "__main__":
-    # --- Start Flask Server in Background ---
-    server_thread = threading.Thread(target=run_server)
-    server_thread.daemon = True
-    server_thread.start()
-
-    main()
+    print("LIVE RANG FORWARDER RUNNING...")
+    threading.Thread(target=check_console, daemon=True).start()
+    bot.infinity_polling()
