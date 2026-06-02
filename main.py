@@ -28,7 +28,7 @@ API_URL = "https://2oo9.cloud/api/MXS47FLFX0U/project/tetragonexvoltxsms/@public
 CHECK_INTERVAL = 50       
 
 # --- আপনার লিংকসমূহ (এখানে আপনার আসল লিংকগুলো বসিয়ে দিন) ---
-NUMBER_BOT_LINK = "https://t.me/rmxel_bot"    # আপনার নাম্বার বটের লিংক
+NUMBER_BOT_LINK = "https://t.me/rmxel1_bot"    # আপনার নাম্বার বটের লিংক
 MAIN_CHANNEL_LINK = "https://t.me/rmmethodzone" # আপনার মেইন চ্যানেলের লিংক
 
 sent_messages = set()
