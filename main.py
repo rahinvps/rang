@@ -210,4 +210,4 @@ if __name__ == "__main__":
     server_thread.daemon = True
     server_thread.start()
 
-    main()
+    main()g
